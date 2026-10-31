@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="fa" dir="rtl" data-theme="green" data-mode="day">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#2e7d32">
+<title>دعای کمیل</title>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header id="top">
+  <h1>دعای کمیل</h1>
+  <button class="ibtn" id="btn-mode" title="شب / روز" aria-label="شب و روز">☾</button>
+  <button class="ibtn" id="btn-set" title="تنظیمات" aria-label="تنظیمات">⚙</button>
+</header>
+
+<main id="view-main">
+  <section class="intro" id="intro">
+    <button id="intro-toggle"><span>مقدمهٔ دعا</span><span id="intro-arrow">▾</span></button>
+    <div class="body" id="intro-body" hidden></div>
+  </section>
+  <div id="lines"></div>
+  <div class="source" id="source-line"></div>
+</main>
+
+<main id="view-fix" hidden></main>
+
+<div id="arrows" aria-label="جمله قبل و بعد">
+  <button id="a-prev" aria-label="جملهٔ قبل">▲</button>
+  <button id="a-next" aria-label="جملهٔ بعد">▼</button>
+</div>
+
+<div id="player">
+  <div class="row">
+    <input type="range" id="seek" min="0" max="130" value="0" step="1" aria-label="جمله">
+    <span id="info"></span>
+  </div>
+  <div class="row"><div class="modes" id="modes">
+    <button data-m="ar">فقط عربی</button><button data-m="both">عربی و ترجمه</button><button data-m="fa">فقط ترجمه</button>
+  </div></div>
+  <div class="ctl">
+    <button id="c-prev" aria-label="جملهٔ قبل">⏮</button>
+    <button id="c-play" class="play" aria-label="پخش">▶</button>
+    <button id="c-next" aria-label="جملهٔ بعد">⏭</button>
+    <button id="c-rate" class="rate" aria-label="سرعت">۱×</button>
+  </div>
+</div>
+
+<div id="sheet-bg"></div>
+<div id="sheet" role="dialog" aria-label="تنظیمات"></div>
+
+<script src="data.js"></script>
+<script src="times.js"></script>
+<script src="app.js"></script>
+</body>
+</html>

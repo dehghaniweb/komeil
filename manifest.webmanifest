@@ -1,0 +1,12 @@
+{
+  "name": "دعای کمیل",
+  "short_name": "دعای کمیل",
+  "lang": "fa",
+  "dir": "rtl",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#eef6ee",
+  "theme_color": "#2e7d32",
+  "icons": [{"src": "icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable"}]
+}
