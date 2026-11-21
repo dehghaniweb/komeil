@@ -1,2 +1,1 @@
-// تنظیمات برنامه. آدرس پل آمار (آدرسِ /exec گوگل‌اسکریپت) را بین گیومه‌ها بگذارید؛ خالی = هیچ آماری ارسال نمی‌شود.
-window.KOMEIL_CONFIG = { statsUrl: '' };
+window.KOMEIL_CONFIG = { statsUrl: 'https://script.google.com/macros/s/AKfycbxxnkmZtCAFmfWSZU_JmRzRxzD-TNvSklqwtEQXgzlnYaVohTYyDUkQ2OEeRJ97q4s/exec' };
