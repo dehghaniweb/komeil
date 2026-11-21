@@ -1,5 +1,5 @@
 // سرویس‌ورکر دعای کمیل: پوستهٔ برنامه آفلاین می‌شود؛ فایل‌های صوتی را خود برنامه (دکمهٔ «ذخیره برای آفلاین») نگه می‌دارد.
-const SHELL = 'komeil-shell-v4';
+const SHELL = 'komeil-shell-v5';
 const FILES = ['./', 'index.html', 'style.css', 'app.js', 'data.js', 'times.js', 'config.js', 'manifest.webmanifest', 'icon.svg',
   'fonts/AmiriQuran.ttf', 'fonts/Vazirmatn-Regular.woff2', 'fonts/Vazirmatn-Medium.woff2', 'fonts/Vazirmatn-Bold.woff2'];
 

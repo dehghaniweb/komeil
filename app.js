@@ -344,6 +344,62 @@ function renderSheet() {
   const cl = el('button', 'btn pri', 'بستن'); cl.onclick = () => document.body.classList.remove('sheet-open'); sh.append(cl);
 }
 
+/* ---------- دیدن آمار داخل برنامه (مخفی) ----------
+   ۷ بار پشت‌سرهم زدن روی عنوان «دعای کمیل» ← پرسیدن کد شخصی ← نمایش آمار.
+   کد فقط (اگر بخواهید) روی همین دستگاه می‌ماند؛ در خود برنامه یا گیت‌هاب هیچ کدی نیست. */
+{
+  const AK = 'komeil.ak';
+  const getK = () => { try { return localStorage.getItem(AK) || ''; } catch (e) { return ''; } };
+  const setK = v => { try { if (v) localStorage.setItem(AK, v); else localStorage.removeItem(AK); } catch (e) {} };
+  let box = null;
+  const close = () => { if (box) { box.remove(); box = null; document.body.classList.remove('stats-open'); } };
+  const load = async (code, remember) => {
+    const body = box.querySelector('.sbody'); body.textContent = '';
+    body.append(el('p', 'smsg', 'در حال گرفتن آمار…'));
+    let txt = '';
+    try {
+      const r = await fetch(STATS_URL + '?k=' + encodeURIComponent(code) + '&html=1&t=' + Date.now(), { cache: 'no-store', credentials: 'omit' });
+      txt = await r.text();
+    } catch (e) { body.textContent = ''; body.append(el('p', 'smsg', 'اتصال برقرار نشد. اینترنت را بررسی کنید و دوباره امتحان کنید.')); form(); return; }
+    body.textContent = '';
+    if (!/^<!DOCTYPE html>/i.test(txt)) {
+      setK('');
+      body.append(el('p', 'smsg', txt.indexOf('خطا') === 0 ? txt : 'کد درست نیست.')); form(); return;
+    }
+    if (remember) setK(code);
+    const f = document.createElement('iframe');
+    f.className = 'sframe'; f.title = 'آمار';
+    f.setAttribute('sandbox', 'allow-scripts allow-popups allow-popups-to-escape-sandbox');
+    f.srcdoc = txt; body.append(f);
+  };
+  const form = () => {
+    const body = box.querySelector('.sbody');
+    const inp = el('input'); inp.type = 'password'; inp.autocomplete = 'off'; inp.autocapitalize = 'off'; inp.spellcheck = false; inp.placeholder = 'کد شخصی';
+    inp.setAttribute('aria-label', 'کد شخصی');
+    const lab = el('label', 'srem'); const cb = el('input'); cb.type = 'checkbox'; cb.checked = true; lab.append(cb, document.createTextNode(' روی این دستگاه به خاطر بسپار'));
+    const go = el('button', 'btn pri', 'نمایش آمار'); go.onclick = () => { const v = inp.value.trim(); if (v) load(v, cb.checked); };
+    inp.addEventListener('keydown', ev => { if (ev.key === 'Enter') go.click(); });
+    const w = el('div', 'sform'); w.append(inp, lab, go); body.append(w); setTimeout(() => inp.focus(), 50);
+  };
+  const open = () => {
+    if (box) return;
+    box = el('div', 'statsview'); document.body.classList.add('stats-open');
+    const bar = el('div', 'sbar'); bar.append(el('b', '', 'آمار'));
+    const rf = el('button', 'btn', 'بازخوانی'); rf.onclick = () => { const k = getK(); if (k) load(k, true); else { box.querySelector('.sbody').textContent = ''; form(); } };
+    const fg = el('button', 'btn', 'فراموش‌کردن کد'); fg.onclick = () => { setK(''); box.querySelector('.sbody').textContent = ''; form(); };
+    const cx = el('button', 'btn pri', 'بستن'); cx.onclick = close;
+    bar.append(rf, fg, cx); box.append(bar, el('div', 'sbody')); document.body.append(box);
+    const k = getK(); if (k) load(k, true); else form();
+  };
+  if (STATS_URL) {
+    let n = 0, t0 = 0;
+    $('#top h1').addEventListener('click', () => {
+      const now = Date.now(); if (now - t0 > 4000) n = 0; if (n === 0) t0 = now; n++;
+      if (n >= 7) { n = 0; open(); }
+    });
+  }
+}
+
 /* ---------- ابزار اصلاح زمان (#fix) ---------- */
 let fixActive = false, fx = null, fxTimer = null;
 function stopFix() { if (fxTimer) { clearInterval(fxTimer); fxTimer = null; } if (fx) fx.stopAt = null; }
