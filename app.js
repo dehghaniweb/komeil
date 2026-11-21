@@ -146,6 +146,31 @@ const CACHE_AUDIO = 'komeil-audio-v1';
 const audio = { ar: new Audio(), fa: new Audio() };
 const offline = { ar: false, fa: false };
 for (const k in audio) { audio[k].preload = 'auto'; audio[k].src = AUDIO_PATH[k]; }
+/* منبع دوم صوت: اگر گیت‌هاب جواب نداد، صوت از تلگرام (از راه پل گوگل) گرفته می‌شود. توکن فقط پیش خودِ پل است. */
+const bridgeBusy = { ar: false, fa: false };
+async function bridgeBlob(tr) {
+  if (!STATS_URL) throw new Error('no bridge');
+  const r = await fetch(STATS_URL + '?a=' + tr + '&t=' + Date.now(), { cache: 'no-store', credentials: 'omit' });
+  const txt = (await r.text()).trim();
+  if (txt.length < 100000) throw new Error('bridge: ' + txt.slice(0, 20));
+  const b = await (await fetch('data:audio/mpeg;base64,' + txt)).blob();
+  if (b.size < 50000) throw new Error('bridge: small');
+  return b;
+}
+async function useBridgeAudio(tr) {
+  if (!STATS_URL || bridgeBusy[tr] || offline[tr]) return;
+  bridgeBusy[tr] = true;
+  try {
+    toast('در حال گرفتن صوت از منبع دوم…');
+    const blob = await bridgeBlob(tr), a = audio[tr], t = a.currentTime, was = !a.paused;
+    if (window.caches) { try { const c = await caches.open(CACHE_AUDIO); await c.put(absUrl(AUDIO_PATH[tr]), new Response(blob, { headers: { 'Content-Type': 'audio/mpeg', 'Content-Length': String(blob.size) } })); } catch (e) {} }
+    a.src = URL.createObjectURL(blob); offline[tr] = true;
+    a.addEventListener('loadedmetadata', function f() { a.removeEventListener('loadedmetadata', f); try { a.currentTime = t; } catch (e) {} if (was) a.play().catch(() => {}); });
+    a.load(); renderSheet();
+  } catch (e) { toast('صوت در دسترس نیست. کمی بعد دوباره امتحان کنید.'); }
+  finally { bridgeBusy[tr] = false; }
+}
+for (const k in audio) audio[k].addEventListener('error', () => { if (!audio[k].src.startsWith('blob:')) useBridgeAudio(k); });
 const absUrl = p => new URL(p, location.href).href;
 async function loadCachedAudio() {
   if (!window.caches) return;
@@ -163,8 +188,15 @@ async function downloadAudio(onProgress) {
   const trs = ['ar', 'fa'];
   const sizes = {}, got = { ar: 0, fa: 0 };
   for (const tr of trs) {
-    const resp = await fetch(AUDIO_PATH[tr]);
-    if (!resp.ok) throw new Error('HTTP ' + resp.status);
+    let resp = null;
+    try { resp = await fetch(AUDIO_PATH[tr]); if (!resp.ok) resp = null; } catch (e) { resp = null; }
+    if (!resp) {   // گیت‌هاب جواب نداد ← منبع دوم (تلگرام)
+      const blob = await bridgeBlob(tr); got[tr] = blob.size; onProgress && onProgress(tr, blob.size, blob.size);
+      await c.put(absUrl(AUDIO_PATH[tr]), new Response(blob, { headers: { 'Content-Type': 'audio/mpeg', 'Content-Length': String(blob.size) } }));
+      const a = audio[tr], t = a.currentTime, was = !a.paused;
+      a.src = URL.createObjectURL(blob); a.currentTime = t; if (was) a.play().catch(() => {});
+      offline[tr] = true; continue;
+    }
     const total = +resp.headers.get('content-length') || 0;
     const rd = resp.body.getReader(); const chunks = [];
     for (;;) {
