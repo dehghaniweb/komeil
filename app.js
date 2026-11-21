@@ -18,9 +18,12 @@ const END = { ar: T0.ar.end, fa: T0.fa.end };
 let hasOverride = false;
 (function loadOverride() {
   const o = store.get('times', null);
-  if (o && o.base === T0.v && o.ar && o.fa && o.ar.length === N && o.fa.length === N + 1) { W = { ar: o.ar.slice(), fa: o.fa.slice() }; hasOverride = true; }
+  if (o && o.ar && o.fa && o.ar.length === N && o.fa.length === N + 1) {
+    if (o.vAr === T0.ar.v) { W.ar = o.ar.slice(); hasOverride = true; }     // اصلاح هر صوت فقط وقتی معتبر است که زمان‌بندی پایه عوض نشده باشد
+    if (o.vFa === T0.fa.v) { W.fa = o.fa.slice(); hasOverride = true; }
+  }
 })();
-function saveOverride() { store.set('times', { base: T0.v, ar: W.ar, fa: W.fa }); hasOverride = true; }
+function saveOverride() { store.set('times', { vAr: T0.ar.v, vFa: T0.fa.v, ar: W.ar, fa: W.fa }); hasOverride = true; }
 const nItems = tr => tr === 'ar' ? N : N + 1;
 const itemNext = (tr, k) => k + 1 < nItems(tr) ? W[tr][k + 1] : END[tr];
 function itemEnd(tr, k, trim) {          // پایان جمله؛ با trim مکث بلند آخر جمله کوتاه می‌شود
@@ -33,7 +36,7 @@ function lineAt(arr, t) { let lo = 0, hi = arr.length - 1, r = -1; while (lo <= 
 const fmt = t => { t = Math.max(0, t); const m = Math.floor(t / 60), s = t - m * 60; return String(m).padStart(2, '0') + ':' + s.toFixed(1).padStart(4, '0'); };
 
 /* ---------- تنظیمات ظاهر ---------- */
-const S = Object.assign({ theme: 'green', mode: 'day', ar: 30, fa: 16, showFa: true, autoscroll: true }, store.get('settings', {}));
+const S = Object.assign({ theme: 'green', mode: 'day', ar: 30, fa: 16, showFa: true, autoscroll: true, stats: true }, store.get('settings', {}));
 function applyLook() {
   const r = document.documentElement;
   r.dataset.theme = S.theme; r.dataset.mode = S.mode;
@@ -45,6 +48,83 @@ function applyLook() {
   store.set('settings', S);
 }
 
+/* ---------- آمار ناشناس (از راه پل گوگل‌اسکریپت؛ فقط شمارش‌های بی‌نام، قابل خاموش‌کردن در تنظیمات) ---------- */
+const APP_VER = 4;
+const STATS_URL = String((window.KOMEIL_CONFIG || {}).statsUrl || '').trim();   // خالی = هیچ چیزی ارسال نمی‌شود
+const stat = (function () {
+  const blank = () => ({ o: 0, pl: { ar: 0, both: 0, fa: 0 }, ls: { ar: 0, both: 0, fa: 0 }, h: [], fin: 0, ins: 0, off: 0 });
+  const rnd = n => { try { return Array.from(crypto.getRandomValues(new Uint8Array(n)), b => b.toString(16).padStart(2, '0')).join(''); } catch (e) { let s = ''; for (let i = 0; i < n * 2; i++) s += Math.floor(Math.random() * 16).toString(16); return s; } };
+  let DID = store.get('did', null);                                  // شناسهٔ تصادفیِ بی‌نام؛ هیچ ربطی به شخص ندارد
+  if (typeof DID !== 'string' || !/^d[0-9a-f]{22}$/.test(DID)) { DID = 'd' + rnd(11); store.set('did', DID); }
+  const plat = (() => { const u = navigator.userAgent || ''; if (/android/i.test(u)) return 'a'; if (/iphone|ipad|ipod/i.test(u) || (/macintosh/i.test(u) && navigator.maxTouchPoints > 1)) return 'i'; if (/windows/i.test(u)) return 'w'; if (/macintosh|mac os/i.test(u)) return 'm'; if (/linux|cros|x11/i.test(u)) return 'l'; return 'o'; })();
+  const standalone = () => { try { return matchMedia('(display-mode: standalone)').matches || navigator.standalone === true; } catch (e) { return false; } };
+  const enabled = () => !!STATS_URL && S.stats !== false;
+  let P = blank(), heard = new Set(), secs = new Array(N).fill(0), OUT = store.get('statq', []), busy = false, hiddenAt = 0, started = false;
+  if (!Array.isArray(OUT)) OUT = [];
+  const save = () => { if (OUT.length) store.set('statq', OUT); else store.del('statq'); };
+  const merge = (a, b) => {
+    const r = blank();
+    ['o', 'fin', 'ins', 'off'].forEach(k => { r[k] = (a[k] || 0) + (b[k] || 0); });
+    ['pl', 'ls'].forEach(k => ['ar', 'both', 'fa'].forEach(m => { r[k][m] = ((a[k] || {})[m] || 0) + ((b[k] || {})[m] || 0); }));
+    r.h = Array.from(new Set((a.h || []).concat(b.h || [])));
+    return r;
+  };
+  const take = () => {                                              // آنچه تا الان جمع شده را بیرون می‌کشد (ثانیه‌های اعشاری می‌مانند برای دفعهٔ بعد)
+    const ls = { ar: Math.floor(P.ls.ar), both: Math.floor(P.ls.both), fa: Math.floor(P.ls.fa) };
+    if (!(P.o || P.fin || P.ins || P.off || P.h.length || P.pl.ar || P.pl.both || P.pl.fa || ls.ar || ls.both || ls.fa)) return null;
+    const p = { o: P.o, pl: P.pl, ls, h: P.h, fin: P.fin, ins: P.ins, off: P.off };
+    const n = blank(); n.ls = { ar: P.ls.ar - ls.ar, both: P.ls.both - ls.both, fa: P.ls.fa - ls.fa }; P = n;
+    return p;
+  };
+  const body = p => JSON.stringify(Object.assign({ v: 1, d: DID, p: plat, sa: standalone() ? 1 : 0, av: APP_VER }, p));
+  const post = p => {                                               // بدون کوکی و بدون پاسخ؛ فقط خطای شبکه خوانده می‌شود
+    try { return fetch(STATS_URL, { method: 'POST', mode: 'no-cors', credentials: 'omit', cache: 'no-store', keepalive: true, headers: { 'Content-Type': 'text/plain;charset=UTF-8' }, body: body(p) }).then(() => true, () => false); }
+    catch (e) { return Promise.resolve(false); }
+  };
+  const beacon = p => {                                             // برای لحظهٔ بستن/رفتن به پس‌زمینه
+    try { if (navigator.sendBeacon) return navigator.sendBeacon(STATS_URL, new Blob([body(p)], { type: 'text/plain;charset=UTF-8' })); } catch (e) {}
+    post(p); return true;
+  };
+  async function drain(final) {
+    try {
+      if (!enabled()) return;
+      const p = take(); if (p) { OUT.push(p); while (OUT.length > 10) OUT.splice(0, 2, merge(OUT[0], OUT[1])); save(); }
+      if (!OUT.length) return;
+      if (final) { while (OUT.length) { if (!beacon(OUT[0])) break; OUT.shift(); } save(); return; }
+      if (busy || navigator.onLine === false) return;
+      busy = true;
+      try { while (OUT.length && enabled()) { const x = OUT.shift(); save(); if (!(await post(x))) { OUT.unshift(x); save(); break; } } } finally { busy = false; }
+    } catch (e) {}
+  }
+  const api = {
+    open() { if (!enabled()) return; P.o++; heard = new Set(); secs.fill(0); },
+    play(m) { if (enabled() && P.pl[m] != null) P.pl[m]++; },
+    listen(dt, m, line) {
+      if (!enabled() || P.ls[m] == null) return;
+      P.ls[m] += dt;
+      if (line >= 0 && line < N) { secs[line] += dt; if (secs[line] >= 2 && !heard.has(line)) { heard.add(line); P.h.push(line); } }   // «این جمله شنیده شد»: حداقل ۲ ثانیه
+    },
+    fin() { if (enabled()) P.fin++; },
+    ins() { if (enabled()) P.ins++; },
+    off() { if (enabled()) P.off++; },
+    flush: drain,
+    setEnabled(on) { if (!on) { P = blank(); OUT = []; save(); } },
+    peek() { return { P, OUT: OUT.slice(), id: DID, url: STATS_URL, enabled: enabled() }; },
+    start() {
+      if (started || !STATS_URL) return; started = true;
+      setTimeout(() => drain(false), 3000);
+      setInterval(() => drain(false), 60000 + Math.floor(Math.random() * 10000));
+      document.addEventListener('visibilitychange', () => {
+        if (document.visibilityState === 'hidden') { hiddenAt = Date.now(); drain(true); }
+        else if (hiddenAt && Date.now() - hiddenAt > 30 * 60 * 1000) { hiddenAt = 0; api.open(); }   // برگشت بعد از نیم‌ساعت = بازدید تازه
+      });
+      window.addEventListener('pagehide', () => drain(true));
+      window.addEventListener('online', () => drain(false));
+    }
+  };
+  return api;
+})();
+
 /* ---------- ساخت صفحه ---------- */
 const linesBox = $('#lines');
 D.lines.forEach((l, i) => {
@@ -54,7 +134,8 @@ D.lines.forEach((l, i) => {
   linesBox.append(a);
 });
 $('#intro-body').textContent = D.intro;
-$('#source-line').textContent = SOURCE_TEXT;
+const FOOTER_TEXT = 'این برنامه کاملاً رایگان و بدون تبلیغات، برای آسایش شما ارائه شده است.\n(علی دهقانی)';   // جملهٔ پایین صفحه (همان جملهٔ برنامهٔ قرآن)
+{ const f = $('#source-line'); if (FOOTER_TEXT) { f.textContent = FOOTER_TEXT; f.hidden = false; } else f.hidden = true; }
 $('#intro-toggle').addEventListener('click', () => {
   const b = $('#intro-body'); b.hidden = !b.hidden; $('#intro-arrow').textContent = b.hidden ? '▾' : '▴';
 });
@@ -102,7 +183,7 @@ async function downloadAudio(onProgress) {
 async function removeOfflineAudio() { try { await caches.delete(CACHE_AUDIO); } catch (e) {} offline.ar = offline.fa = false; for (const k in audio) { audio[k].src = AUDIO_PATH[k]; } }
 
 /* ---------- موتور پخش ---------- */
-let mode = store.get('mode', 'both'), cur = clamp(store.get('pos', 0), -1, N - 1), phase = 'ar', playing = false, timer = null, busyUntil = 0;
+let mode = store.get('mode', 'both'), cur = clamp(store.get('pos', 0), -1, N - 1), phase = 'ar', playing = false, timer = null, busyUntil = 0, lastTick = 0;
 let rate = store.get('rate', 1);
 const RATES = [0.8, 0.9, 1, 1.15, 1.3, 1.5];
 function seekPlay(tr, t) {
@@ -111,9 +192,10 @@ function seekPlay(tr, t) {
   if (a.readyState >= 1) go(); else a.addEventListener('loadedmetadata', go, { once: true });
 }
 function pauseAll() { audio.ar.pause(); audio.fa.pause(); }
-function stopTimer() { clearInterval(timer); timer = null; }
+function stopTimer() { clearInterval(timer); timer = null; lastTick = 0; }
 function startTimer() { stopTimer(); timer = setInterval(tick, 30); }
 function startAt(i, ph) {
+  const was = playing;
   pauseAll(); stopFix();
   if (mode === 'ar' && i < 0) i = 0;
   cur = i;
@@ -121,10 +203,14 @@ function startAt(i, ph) {
   else if (mode === 'fa') { phase = 'fa'; seekPlay('fa', W.fa[i + 1]); }
   else { phase = i < 0 ? 'fa' : (ph || 'ar'); seekPlay(phase, phase === 'ar' ? W.ar[i] : W.fa[i + 1]); }
   playing = true; startTimer(); mark(); updateUI();
+  if (!was) stat.play(mode);
 }
-function finish() { pauseAll(); playing = false; stopTimer(); updateUI(); }
+function finish() { pauseAll(); playing = false; stopTimer(); updateUI(); stat.fin(); }
 function tick() {
-  if (!playing || performance.now() < busyUntil) return;
+  const now = performance.now();
+  if (playing && lastTick) stat.listen(Math.min((now - lastTick) / 1000, 5), mode, cur);   // مدت شنیدن (برای آمار ناشناس)
+  lastTick = now;
+  if (!playing || now < busyUntil) return;
   if (mode === 'ar' || mode === 'fa') {
     const a = audio[mode], t = a.currentTime;
     if (a.ended || t >= END[mode] - 0.05) { finish(); return; }
@@ -149,7 +235,7 @@ function togglePlay() {
   const k = tr === 'ar' ? cur : cur + 1;
   const a = audio[tr];
   if (cur >= 0 || tr === 'fa') {
-    if (k >= 0 && a.currentTime >= W[tr][k] - 0.3 && a.currentTime < itemNext(tr, k) && !a.ended) { playing = true; a.playbackRate = rate; a.play().catch(() => {}); startTimer(); updateUI(); return; }
+    if (k >= 0 && a.currentTime >= W[tr][k] - 0.3 && a.currentTime < itemNext(tr, k) && !a.ended) { playing = true; a.playbackRate = rate; a.play().catch(() => {}); startTimer(); updateUI(); stat.play(mode); return; }
   }
   startAt(cur < 0 && mode === 'ar' ? 0 : cur, 'ar');
 }
@@ -157,7 +243,7 @@ function go(i) {
   i = clamp(i, mode === 'ar' ? 0 : -1, N - 1);
   if (playing) startAt(i, 'ar'); else { cur = i; pauseAll(); mark(); updateUI(); }
 }
-function setMode(m) { mode = m; store.set('mode', m); if (playing) startAt(cur, 'ar'); else { if (m === 'ar' && cur < 0) cur = 0; mark(); } updateUI(); }
+function setMode(m) { const was = playing, changed = m !== mode; mode = m; store.set('mode', m); if (playing) startAt(cur, 'ar'); else { if (m === 'ar' && cur < 0) cur = 0; mark(); } updateUI(); if (was && changed) stat.play(m); }
 function setRate(r) { rate = r; store.set('rate', r); audio.ar.playbackRate = r; audio.fa.playbackRate = r; updateUI(); }
 
 /* ---------- نمایش ---------- */
@@ -181,15 +267,19 @@ function updateInfo() {
   $('#info').textContent = (cur < 0 ? 'مقدمه' : 'جملهٔ ' + fa(cur + 1) + ' از ' + fa(N)) + (playing ? ' · ' + fmt(t) : '');
   if (prevEl && mode === 'both') { prevEl.classList.toggle('phase-ar', phase === 'ar'); prevEl.classList.toggle('phase-fa', phase === 'fa'); }
 }
+const ICON_PLAY = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5v14l11-7z" stroke="currentColor" stroke-width="1.2" stroke-linejoin="round"/></svg>';
+const ICON_PAUSE = '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="6.2" y="5" width="4" height="14" rx="1.2"/><rect x="13.8" y="5" width="4" height="14" rx="1.2"/></svg>';
 function updateUI() {
-  $('#c-play').textContent = playing ? '⏸' : '▶';
+  $('#c-play').innerHTML = playing ? ICON_PAUSE : ICON_PLAY; $('#c-play').setAttribute('aria-label', playing ? 'توقف' : 'پخش');
   $('#c-rate').textContent = fa(rate) + '×';
   document.querySelectorAll('#modes button').forEach(b => b.classList.toggle('on', b.dataset.m === mode));
   updateInfo();
 }
 $('#c-play').onclick = togglePlay;
-$('#c-next').onclick = $('#a-next').onclick = () => go(cur + 1);
-$('#c-prev').onclick = $('#a-prev').onclick = () => go(cur - 1);
+$('#c-next').onclick = () => go(cur + 1);
+$('#c-prev').onclick = () => go(cur - 1);
+$('#a-top').onclick = () => window.scrollTo({ top: 0, behavior: 'smooth' });          // اول دعا
+$('#a-cur').onclick = () => { const e = cur < 0 ? $('#intro') : document.getElementById('l' + cur); if (e) e.scrollIntoView({ block: 'center', behavior: 'smooth' }); };   // جملهٔ در حال پخش
 $('#c-rate').onclick = () => setRate(RATES[(RATES.indexOf(rate) + 1) % RATES.length] || 1);
 $('#modes').onclick = e => { const b = e.target.closest('button'); if (b) setMode(b.dataset.m); };
 $('#seek').addEventListener('input', e => { $('#info').textContent = 'جملهٔ ' + fa(+e.target.value + 1) + ' از ' + fa(N); });
@@ -232,7 +322,7 @@ function renderSheet() {
   const btn = el('button', 'btn pri', ok ? 'ذخیرهٔ دوباره' : 'ذخیره برای آفلاین');
   btn.onclick = async () => {
     btn.disabled = true; msg.textContent = 'در حال دریافت…';
-    try { await downloadAudio((tr, g, tot) => { const part = tr === 'ar' ? 0 : 0.5; bi.style.width = Math.min(100, (part + (tot ? g / tot : 0.5) * 0.5) * 100) + '%'; msg.textContent = (tr === 'ar' ? 'صوت عربی' : 'صوت ترجمه') + ': ' + fa(Math.round(g / 1048576 * 10) / 10) + ' مگابایت'; }); renderSheet(); }
+    try { await downloadAudio((tr, g, tot) => { const part = tr === 'ar' ? 0 : 0.5; bi.style.width = Math.min(100, (part + (tot ? g / tot : 0.5) * 0.5) * 100) + '%'; msg.textContent = (tr === 'ar' ? 'صوت عربی' : 'صوت ترجمه') + ': ' + fa(Math.round(g / 1048576 * 10) / 10) + ' مگابایت'; }); stat.off(); renderSheet(); }
     catch (e) { msg.textContent = 'ذخیره نشد: ' + e.message; btn.disabled = false; }
   };
   const row = el('div', 'row2'); row.append(btn);
@@ -243,6 +333,13 @@ function renderSheet() {
   const tr = el('div', 'row2'); const fx = el('a', 'btn', 'ابزار اصلاح زمان'); fx.href = '#fix'; fx.onclick = () => document.body.classList.remove('sheet-open'); tr.append(fx);
   if (hasOverride) { const r = el('button', 'btn', 'حذف اصلاحات'); r.onclick = () => { store.del('times'); location.reload(); }; tr.append(r); }
   tm.append(tr); add('زمان‌بندی جمله‌ها', tm);
+  if (STATS_URL) {   // آمار ناشناس: فقط وقتی پل آمار تنظیم شده باشد دیده می‌شود
+    const on = S.stats !== false;
+    const sb = el('button', 'chip' + (on ? ' on' : ''), 'آمار ناشناس' + (on ? ': روشن' : ': خاموش'));
+    sb.onclick = () => { S.stats = !on; applyLook(); stat.setEnabled(S.stats); renderSheet(); };
+    const sr = el('div', 'chips'); sr.append(sb);
+    add('آمار ناشناس', el('p', '', 'برای اینکه بدانیم برنامه چقدر استفاده می‌شود، فقط شمارش‌های بی‌نام (تعداد بازدید، دفعات پخش و مدت شنیدن) فرستاده می‌شود. هیچ نام، شماره، مکان یا اطلاعات شخصی دیگری فرستاده نمی‌شود. اگر نمی‌خواهید، خاموش کنید.'), sr);
+  }
   add('منبع', el('p', '', SOURCE_TEXT));
   const cl = el('button', 'btn pri', 'بستن'); cl.onclick = () => document.body.classList.remove('sheet-open'); sh.append(cl);
 }
@@ -276,7 +373,7 @@ function fxNextSuspect() {
   const after = list.find(k => k > fx.k); return after != null ? after : list[0];
 }
 function fxJSON() {
-  return JSON.stringify({ v: T0.v, ar: W.ar, fa: W.fa, checked_ar: fx.chk.ar.slice().sort((a, b) => a - b), checked_fa: fx.chk.fa.slice().sort((a, b) => a - b) });
+  return JSON.stringify({ vAr: T0.ar.v, vFa: T0.fa.v, ar: W.ar, fa: W.fa, checked_ar: fx.chk.ar.slice().sort((a, b) => a - b), checked_fa: fx.chk.fa.slice().sort((a, b) => a - b) });
 }
 function renderFix() {
   const box = $('#view-fix'); box.innerHTML = '';
@@ -362,6 +459,8 @@ applyLook(); updateUI(); mark();
 setTimeout(() => { if (cur > 0 && S.autoscroll) { const e = document.getElementById('l' + cur); if (e) e.scrollIntoView({ block: 'center' }); } }, 100);
 loadCachedAudio();
 route();
+window.addEventListener('appinstalled', () => stat.ins());
+stat.open(); stat.start();
 if ('serviceWorker' in navigator && location.protocol !== 'file:') navigator.serviceWorker.register('sw.js').catch(() => {});
-window.__komeil = { W, audio, go, startAt, setMode, get state() { return { mode, cur, phase, playing }; } };
+window.__komeil = { W, audio, go, startAt, setMode, stat, get state() { return { mode, cur, phase, playing }; } };
 })();

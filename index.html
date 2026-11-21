@@ -22,14 +22,14 @@
     <div class="body" id="intro-body" hidden></div>
   </section>
   <div id="lines"></div>
-  <div class="source" id="source-line"></div>
+  <div class="source" id="source-line" hidden></div>
 </main>
 
 <main id="view-fix" hidden></main>
 
-<div id="arrows" aria-label="جمله قبل و بعد">
-  <button id="a-prev" aria-label="جملهٔ قبل">▲</button>
-  <button id="a-next" aria-label="جملهٔ بعد">▼</button>
+<div id="arrows">
+  <button id="a-top" aria-label="اول دعا" title="رفتن به اول دعا"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 20V5M5.5 11.5L12 5l6.5 6.5" fill="none" stroke="currentColor" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+  <button id="a-cur" aria-label="جملهٔ در حال پخش" title="رفتن به جملهٔ در حال پخش"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4v15M5.5 12.5L12 19l6.5-6.5" fill="none" stroke="currentColor" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
 </div>
 
 <div id="player">
@@ -41,9 +41,9 @@
     <button data-m="ar">فقط عربی</button><button data-m="both">عربی و ترجمه</button><button data-m="fa">فقط ترجمه</button>
   </div></div>
   <div class="ctl">
-    <button id="c-prev" aria-label="جملهٔ قبل">⏮</button>
-    <button id="c-play" class="play" aria-label="پخش">▶</button>
-    <button id="c-next" aria-label="جملهٔ بعد">⏭</button>
+    <button id="c-prev" aria-label="جملهٔ قبل" title="جملهٔ قبل"><svg viewBox="0 0 24 24" aria-hidden="true"><g transform="translate(.3 0)"><rect x="5.4" y="5" width="2.6" height="14" rx="1.3"/><path d="M10 12l8.2-5.8v11.6z" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/></g></svg></button>
+    <button id="c-play" class="play" aria-label="پخش"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5v14l11-7z" stroke="currentColor" stroke-width="1.2" stroke-linejoin="round"/></svg></button>
+    <button id="c-next" aria-label="جملهٔ بعد" title="جملهٔ بعد"><svg viewBox="0 0 24 24" aria-hidden="true"><g transform="translate(-.3 0)"><rect x="16" y="5" width="2.6" height="14" rx="1.3"/><path d="M14 12L5.8 6.2v11.6z" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/></g></svg></button>
     <button id="c-rate" class="rate" aria-label="سرعت">۱×</button>
   </div>
 </div>
@@ -53,6 +53,7 @@
 
 <script src="data.js"></script>
 <script src="times.js"></script>
+<script src="config.js"></script>
 <script src="app.js"></script>
 </body>
 </html>
